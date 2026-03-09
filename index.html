@@ -1,343 +1,399 @@
-import React, { useState, useEffect } from 'react';
-import { User, Phone, Mail, MapPin, Briefcase, GraduationCap, Calendar, Award, Edit3, Save, X, Plus, MessageCircle, UserPlus, AlertCircle } from 'lucide-react';
-
-// --- 配置區 (請根據實際情況替換) ---
-const LIFF_ID = "2008381830-e1zpS7X1"; // 您的 LINE LIFF ID
-const GAS_URL = "https://script.google.com/macros/s/AKfycbz8y9fXgLZYP5hZBZAe1MRhO3dzKEhCgTA5ppeqXL-RbY1ZTAG0fYFf76MUX_b10Drk/exec"; // 您的 GAS 網址
-
-const inputClasses = "w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:border-[#072e4d] focus:ring-1 focus:ring-[#072e4d] transition-colors mt-1";
-
-export default function App() {
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [isRegistered, setIsRegistered] = useState(false);
-  const [userId, setUserId] = useState(null);
-  const [error, setError] = useState(null);
-  
-  // 編輯模式狀態
-  const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState({});
-
-  // 1. 初始化 LIFF 並獲取 User ID
-  useEffect(() => {
-    const initLiff = async () => {
-      try {
-        // 動態載入 LIFF SDK (如果環境沒提供)
-        if (!window.liff) {
-          const script = document.createElement('script');
-          script.src = "https://static.line-scdn.net/liff/edge/2/sdk.js";
-          script.async = true;
-          script.onload = () => startLiff();
-          document.head.appendChild(script);
-        } else {
-          startLiff();
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BYUMS 會員專區</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            -webkit-tap-highlight-color: transparent;
         }
-      } catch (err) {
-        setError("LIFF SDK 載入失敗");
-        setLoading(false);
-      }
-    };
-
-    const startLiff = async () => {
-      try {
-        await window.liff.init({ liffId: LIFF_ID });
-        if (!window.liff.isLoggedIn()) {
-          window.liff.login();
-        } else {
-          const userProfile = await window.liff.getProfile();
-          setUserId(userProfile.userId);
-          fetchMemberData(userProfile.userId);
+        .loading-spinner {
+            border: 3px solid rgba(7, 46, 77, 0.1);
+            border-top: 3px solid #072e4d;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
         }
-      } catch (err) {
-        console.error("LIFF Init Error", err);
-        // 如果是在一般瀏覽器測試，手動設定一個測試 ID
-        const testId = "TEST_USER_001";
-        setUserId(testId);
-        fetchMemberData(testId);
-      }
-    };
-
-    initLiff();
-  }, []);
-
-  // 2. 從 Google Sheets 獲取資料
-  const fetchMemberData = async (uid) => {
-    setLoading(true);
-    try {
-      // 實際生產環境下請取消註解：
-      /*
-      const response = await fetch(`${GAS_URL}?userId=${uid}`);
-      const result = await response.json();
-      if (result.status === "success" && result.data) {
-        setProfile(result.data);
-        setIsRegistered(true);
-      } else {
-        setIsRegistered(false);
-      }
-      */
-      
-      // --- 模擬測試邏輯 ---
-      setTimeout(() => {
-        const hasData = true; // 模擬資料庫是否有資料
-        if (hasData) {
-          const mock = {
-            id: "M-757Z",
-            name: "測試會員",
-            status: "普通會員",
-            birthDate: "1995-10-10",
-            birthPlace: "台北市",
-            gender: "男",
-            phone: "0912-345-678",
-            lineId: "line_test_id",
-            email: "test@example.com",
-            education: "國立大學 學士",
-            experience: ["3年行銷經驗", "2年專案開發"],
-            occupation: "自由業",
-            currentJob: "個人工作室"
-          };
-          setProfile(mock);
-          setIsRegistered(true);
-        } else {
-          setIsRegistered(false);
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
-        setLoading(false);
-      }, 1000);
-      
-    } catch (err) {
-      setError("無法連接到資料庫");
-      setLoading(false);
-    }
-  };
+        .screen { display: none; }
+        .screen.active { display: block; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
 
-  const calculateAge = (birthDateString) => {
-    if (!birthDateString) return 0;
-    const today = new Date();
-    const birth = new Date(birthDateString);
-    let age = today.getFullYear() - birth.getFullYear();
-    const m = today.getMonth() - birth.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
-    return age;
-  };
+    <!-- 1. 載入中畫面 -->
+    <div id="loading-screen" class="screen active min-h-screen flex flex-col justify-center items-center p-6">
+        <div class="loading-spinner mb-4"></div>
+        <p class="text-slate-500 font-medium">正在驗證身份中...</p>
+    </div>
 
-  const handleEditClick = () => {
-    setEditForm({ ...profile });
-    setIsEditing(true);
-  };
-
-  const handleSaveClick = async () => {
-    setLoading(true);
-    // TODO: 發送 fetch(GAS_URL, { method: 'POST', body: JSON.stringify(editForm) })
-    setProfile({ ...editForm });
-    setIsEditing(false);
-    setLoading(false);
-  };
-
-  const handleExpChange = (index, value) => {
-    const newExp = [...(editForm.experience || [])];
-    newExp[index] = value;
-    setEditForm(prev => ({ ...prev, experience: newExp }));
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-6">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#072e4d] mb-4"></div>
-        <p className="text-slate-500 font-medium">正在驗證身份中...</p>
-      </div>
-    );
-  }
-
-  // --- 未註冊畫面 ---
-  if (!isRegistered) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-8 text-center">
-        <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-lg mb-6 border-4 border-[#072e4d]/10">
-          <UserPlus className="w-12 h-12 text-[#072e4d]" />
+    <!-- 2. 未註冊畫面 -->
+    <div id="unregistered-screen" class="screen min-h-screen flex flex-col items-center justify-center p-8 text-center">
+        <div class="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-lg mb-6 border-4 border-[#072e4d]/10">
+            <i data-lucide="user-plus" class="w-12 h-12 text-[#072e4d]"></i>
         </div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">尚未註冊會員</h2>
-        <p className="text-slate-500 mb-8 leading-relaxed">
-          系統找不到您的會員資料。<br />
-          點擊下方按鈕進行註冊以享有完整服務。
+        <h2 class="text-2xl font-bold text-slate-900 mb-2">尚未註冊會員</h2>
+        <p class="text-slate-500 mb-8 leading-relaxed">
+            系統找不到您的會員資料。<br />
+            點擊下方按鈕進行註冊以享有完整服務。
         </p>
-        <button 
-          onClick={() => window.location.href = "YOUR_REGISTRATION_FORM_URL"}
-          className="w-full max-w-xs bg-[#072e4d] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#072e4d]/30 hover:bg-[#072e4d]/90 transition-all active:scale-95"
-        >
-          立即註冊
+        <button onclick="redirectToRegistration()" class="w-full max-w-xs bg-[#072e4d] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#072e4d]/30 hover:bg-[#072e4d]/90 transition-all active:scale-95">
+            立即註冊
         </button>
-        <p className="mt-6 text-xs text-slate-400 font-mono">User ID: {userId}</p>
-      </div>
-    );
-  }
+        <p id="display-userid" class="mt-6 text-xs text-slate-400 font-mono"></p>
+    </div>
 
-  // --- 會員資料主畫面 ---
-  return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-12">
-      {/* 頂部標題 */}
-      <div className="bg-[#072e4d] px-4 pt-6 pb-20 rounded-b-[2rem] shadow-md">
-        <div className="flex justify-center items-center max-w-md mx-auto">
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <Award className="text-white/80 w-6 h-6" />
-            BYUMS會員專區
-          </h1>
-        </div>
-      </div>
-
-      <div className="max-w-md mx-auto px-4 -mt-14 space-y-5">
-        {/* 會員卡片 */}
-        <div className="bg-white rounded-3xl p-6 shadow-lg border border-slate-100 relative overflow-hidden">
-          <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-slate-50 border-4 border-slate-100/50 opacity-50 pointer-events-none"></div>
-          
-          <div className="relative flex items-center gap-5">
-            <div className="shrink-0">
-              <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center shadow-sm border-2 border-white overflow-hidden">
-                <img 
-                  src="https://profile.line-scdn.net/0hnQnduPAgMX5THSYWf3pOKW9YPxMkMzc2K3x8HiNOOk98LXEubnx7HXZNO0t5KSYhZnN3GncbPxkp/preview" 
-                  alt="BYUMS" 
-                  className="w-full h-full object-cover"
-                />
-              </div>
+    <!-- 3. 會員主畫面 -->
+    <div id="main-screen" class="screen pb-12">
+        <!-- 頂部藍色背景 -->
+        <div class="bg-[#072e4d] px-4 pt-6 pb-20 rounded-b-[2rem] shadow-md">
+            <div class="flex justify-center items-center max-w-md mx-auto">
+                <h1 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i data-lucide="award" class="text-white/80 w-6 h-6"></i>
+                    BYUMS會員專區
+                </h1>
             </div>
-            <div className="flex-1">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-900">{profile.name}</h2>
-                  <p className="text-sm text-slate-500 font-mono mt-1">{profile.id}</p>
-                </div>
-                {!isEditing ? (
-                  <button onClick={handleEditClick} className="text-[#072e4d] p-2 bg-[#072e4d]/10 rounded-full">
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-                ) : (
-                  <div className="flex gap-2">
-                    <button onClick={() => setIsEditing(false)} className="text-slate-400 p-2 bg-slate-100 rounded-full"><X className="w-4 h-4" /></button>
-                    <button onClick={handleSaveClick} className="text-white p-2 bg-[#072e4d] rounded-full shadow-sm"><Save className="w-4 h-4" /></button>
-                  </div>
-                )}
-              </div>
-              <div className="mt-3">
-                <span className={`px-3 py-1 rounded-full text-xs font-bold border shadow-sm ${getStatusColor(profile.status)}`}>
-                  {profile.status}
-                </span>
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* 基本資料 */}
-        <section>
-          <h3 className="text-sm font-bold text-slate-500 uppercase mb-2 ml-2">基本資料</h3>
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 space-y-4">
-            {isEditing ? (
-              <div className="flex items-start gap-3">
-                <div className="text-[#072e4d]/80 bg-[#072e4d]/10 p-2 rounded-lg mt-0.5"><User className="w-5 h-5" /></div>
-                <div className="flex-1 space-y-3">
-                  <div className="flex gap-3">
-                    <div className="w-1/3">
-                      <label className="text-xs text-slate-400">性別</label>
-                      <select name="gender" value={editForm.gender || ''} onChange={handleChange} className={inputClasses}>
-                        <option value="男">男</option><option value="女">女</option>
-                      </select>
+        <div class="max-w-md mx-auto px-4 -mt-14 space-y-5">
+            <!-- 會員卡片 -->
+            <div class="bg-white rounded-3xl p-6 shadow-lg border border-slate-100 relative overflow-hidden">
+                <div class="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-slate-50 border-4 border-slate-100/50 opacity-50 pointer-events-none"></div>
+                
+                <div class="relative flex items-center gap-5">
+                    <div class="shrink-0">
+                        <div class="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center shadow-sm border-2 border-white overflow-hidden">
+                            <img src="https://via.placeholder.com/150" id="avatar-img" alt="Avatar" class="w-full h-full object-cover" />
+                        </div>
                     </div>
-                    <div className="flex-1">
-                      <label className="text-xs text-slate-400">出生年月日</label>
-                      <input type="date" name="birthDate" value={editForm.birthDate || ''} onChange={handleChange} className={inputClasses} />
+                    <div class="flex-1">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h2 id="view-name" class="text-2xl font-bold text-slate-900">載入中...</h2>
+                                <p id="view-id" class="text-sm text-slate-500 font-mono mt-1"></p>
+                            </div>
+                            <div id="action-buttons">
+                                <button onclick="enterEditMode()" class="text-[#072e4d] p-2 bg-[#072e4d]/10 rounded-full">
+                                    <i data-lucide="edit-3" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <span id="view-status-badge" class="px-3 py-1 rounded-full text-xs font-bold border shadow-sm">
+                                -
+                            </span>
+                        </div>
                     </div>
-                  </div>
-                  <div className="text-xs bg-slate-50 p-2 rounded-lg border flex justify-between">
-                    <span>系統年齡：</span><span className="font-bold text-[#072e4d]">{calculateAge(editForm.birthDate)} 歲</span>
-                  </div>
                 </div>
-              </div>
-            ) : (
-              <DetailRow icon={<User />} label="性別 / 年齡" value={`${profile.gender} • ${calculateAge(profile.birthDate)}歲 (${profile.birthDate})`} />
-            )}
-            <div className="h-px bg-slate-50 w-full my-2"></div>
-            <DetailRow icon={<MapPin />} label="出生地 / 區域" value={profile.birthPlace} isEditing={isEditing} name="birthPlace" formData={editForm} onChange={handleChange} />
-          </div>
-        </section>
+            </div>
 
-        {/* 聯絡資訊 */}
-        <section>
-          <h3 className="text-sm font-bold text-slate-500 uppercase mb-2 ml-2">聯絡資訊</h3>
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 space-y-4">
-            <DetailRow icon={<Phone />} label="電話 / LINE 手機" value={profile.phone} isEditing={isEditing} name="phone" formData={editForm} onChange={handleChange} />
-            <div className="h-px bg-slate-50 w-full my-2"></div>
-            <DetailRow icon={<MessageCircle />} label="LINE ID (選填)" value={profile.lineId || '未填寫'} isEditing={isEditing} name="lineId" formData={editForm} onChange={handleChange} />
-            <div className="h-px bg-slate-50 w-full my-2"></div>
-            <DetailRow icon={<Mail />} label="電子郵件" value={profile.email} isEditing={isEditing} name="email" type="email" formData={editForm} onChange={handleChange} />
-          </div>
-        </section>
+            <!-- 基本資料區塊 -->
+            <section>
+                <h3 class="text-sm font-bold text-slate-500 uppercase mb-2 ml-2">基本資料</h3>
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 space-y-4" id="basic-info-container">
+                    <!-- JS 動態插入內容 -->
+                </div>
+            </section>
 
-        {/* 專業背景 */}
-        <section>
-          <h3 className="text-sm font-bold text-slate-500 uppercase mb-2 ml-2">專業背景</h3>
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 space-y-4">
-            <DetailRow icon={<GraduationCap />} label="學歷" value={profile.education} isEditing={isEditing} name="education" formData={editForm} onChange={handleChange} />
-            <div className="h-px bg-slate-50 w-full my-2"></div>
-            <DetailRow icon={<Briefcase />} label="職業" value={profile.occupation} isEditing={isEditing} name="occupation" formData={editForm} onChange={handleChange} />
-            <div className="h-px bg-slate-50 w-full my-2"></div>
-            <DetailRow icon={<Briefcase />} label="現職機構與職稱" value={profile.currentJob} isEditing={isEditing} name="currentJob" formData={editForm} onChange={handleChange} />
-            <div className="h-px bg-slate-50 w-full my-2"></div>
+            <!-- 聯絡資訊區塊 -->
+            <section>
+                <h3 class="text-sm font-bold text-slate-500 uppercase mb-2 ml-2">聯絡資訊</h3>
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 space-y-4" id="contact-info-container">
+                    <!-- JS 動態插入內容 -->
+                </div>
+            </section>
+
+            <!-- 專業背景區塊 -->
+            <section>
+                <h3 class="text-sm font-bold text-slate-500 uppercase mb-2 ml-2">專業背景</h3>
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 space-y-4" id="pro-info-container">
+                    <!-- JS 動態插入內容 -->
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- LIFF SDK -->
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+    <script>
+        // --- 設定區 ---
+        const LIFF_ID = "2008381830-e1zpS7X1";
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbz8y9fXgLZYP5hZBZAe1MRhO3dzKEhCgTA5ppeqXL-RbY1ZTAG0fYFf76MUX_b10Drk/exec";
+        const REGISTRATION_URL = "YOUR_REGISTRATION_FORM_URL";
+
+        // --- 全域變數 ---
+        let profileData = null;
+        let isEditing = false;
+        let userId = null;
+        let editForm = {};
+
+        // 初始化
+        window.onload = function() {
+            initLiff();
+        };
+
+        async function initLiff() {
+            try {
+                await liff.init({ liffId: LIFF_ID });
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                } else {
+                    const liffProfile = await liff.getProfile();
+                    userId = liffProfile.userId;
+                    document.getElementById('display-userid').innerText = "User ID: " + userId;
+                    if(liffProfile.pictureUrl) document.getElementById('avatar-img').src = liffProfile.pictureUrl;
+                    fetchMemberData(userId);
+                }
+            } catch (err) {
+                console.error("LIFF Init Error", err);
+                // 測試環境模擬
+                userId = "TEST_USER_001";
+                document.getElementById('display-userid').innerText = "User ID: " + userId + " (測試模式)";
+                fetchMemberData(userId);
+            }
+        }
+
+        async function fetchMemberData(uid) {
+            showScreen('loading-screen');
+            try {
+                // 生產環境應使用：
+                /*
+                const res = await fetch(`${GAS_URL}?userId=${uid}`);
+                const result = await res.json();
+                if (result.status === "success" && result.data) {
+                    profileData = result.data;
+                    renderProfile();
+                    showScreen('main-screen');
+                } else {
+                    showScreen('unregistered-screen');
+                }
+                */
+
+                // 模擬資料邏輯
+                setTimeout(() => {
+                    profileData = {
+                        id: "M-757Z",
+                        name: "測試會員",
+                        status: "普通會員",
+                        birthDate: "1995-10-10",
+                        birthPlace: "台北市",
+                        gender: "男",
+                        phone: "0912-345-678",
+                        lineId: "line_test_id",
+                        email: "test@example.com",
+                        education: "國立大學 學士",
+                        experience: ["3年行銷經驗", "2年專案開發"],
+                        occupation: "自由業",
+                        currentJob: "個人工作室"
+                    };
+                    renderProfile();
+                    showScreen('main-screen');
+                }, 1000);
+            } catch (err) {
+                alert("連線資料庫失敗");
+                showScreen('unregistered-screen');
+            }
+        }
+
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        function renderProfile() {
+            const data = isEditing ? editForm : profileData;
             
-            <div className="flex gap-3 items-start">
-              <div className="text-[#072e4d]/80 bg-[#072e4d]/10 p-2 rounded-lg mt-0.5"><Calendar className="w-5 h-5" /></div>
-              <div className="flex-1">
-                <p className="text-xs text-slate-400 font-medium mb-1">工作經歷</p>
-                {isEditing ? (
-                  <div className="space-y-2">
-                    {editForm.experience?.map((exp, index) => (
-                      <div key={index} className="flex gap-2">
-                        <input value={exp} onChange={(e) => handleExpChange(index, e.target.value)} className={inputClasses} />
-                        <button onClick={() => setEditForm(p => ({...p, experience: p.experience.filter((_,i)=>i!==index)}))} className="mt-1 p-2 text-red-500 bg-red-50 rounded-lg"><X className="w-4 h-4" /></button>
-                      </div>
-                    ))}
-                    <button onClick={() => setEditForm(p => ({...p, experience: [...(p.experience||[]), ""]}))} className="text-sm text-[#072e4d] flex items-center gap-1 mt-2 p-2 bg-[#072e4d]/5 rounded-lg w-full justify-center border border-[#072e4d]/20">
-                      <Plus className="w-4 h-4" /> 新增經歷
-                    </button>
-                  </div>
-                ) : (
-                  <ul className="list-disc list-inside text-sm font-medium text-slate-800 bg-slate-50 p-3 rounded-xl border space-y-1">
-                    {profile.experience?.map((exp, i) => <li key={i}>{exp}</li>)}
-                  </ul>
+            // 頂部卡片
+            document.getElementById('view-name').innerText = data.name;
+            document.getElementById('view-id').innerText = data.id;
+            
+            const badge = document.getElementById('view-status-badge');
+            badge.innerText = data.status;
+            badge.className = `px-3 py-1 rounded-full text-xs font-bold border shadow-sm ${getStatusColor(data.status)}`;
+
+            // 基本資料區
+            document.getElementById('basic-info-container').innerHTML = `
+                ${renderDetailRow('user', '性別 / 年齡', isEditing ? 
+                    `<div class="flex gap-2 mt-1">
+                        <select onchange="updateEditField('gender', this.value)" class="w-1/3 p-2 bg-slate-50 border rounded-lg text-sm">${['男','女'].map(g => `<option value="${g}" ${data.gender===g?'selected':''}>${g}</option>`).join('')}</select>
+                        <input type="date" value="${data.birthDate}" onchange="updateEditField('birthDate', this.value)" class="flex-1 p-2 bg-slate-50 border rounded-lg text-sm">
+                    </div>` : 
+                    `${data.gender} • ${calculateAge(data.birthDate)}歲 (${data.birthDate})`
                 )}
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
-    </div>
-  );
+                <div class="h-px bg-slate-50 w-full"></div>
+                ${renderDetailRow('map-pin', '出生地 / 區域', data.birthPlace, 'birthPlace')}
+            `;
 
-  function handleChange(e) {
-    const { name, value } = e.target;
-    setEditForm(prev => ({ ...prev, [name]: value }));
-  }
+            // 聯絡資訊
+            document.getElementById('contact-info-container').innerHTML = `
+                ${renderDetailRow('phone', '電話 / LINE 手機', data.phone, 'phone')}
+                <div class="h-px bg-slate-50 w-full"></div>
+                ${renderDetailRow('message-circle', 'LINE ID (選填)', data.lineId || '未填寫', 'lineId')}
+                <div class="h-px bg-slate-50 w-full"></div>
+                ${renderDetailRow('mail', '電子郵件', data.email, 'email', 'email')}
+            `;
 
-  function getStatusColor(status) {
-    const colors = {
-      '普通會員': 'bg-blue-100 text-blue-800 border-blue-200',
-      '學生會員': 'bg-green-100 text-green-800 border-green-200',
-      '終身會員': 'bg-yellow-100 text-yellow-800 border-yellow-300'
-    };
-    return colors[status] || 'bg-gray-100 text-gray-800 border-gray-200';
-  }
-}
+            // 專業背景
+            document.getElementById('pro-info-container').innerHTML = `
+                ${renderDetailRow('graduation-cap', '學歷', data.education, 'education')}
+                <div class="h-px bg-slate-50 w-full"></div>
+                ${renderDetailRow('briefcase', '職業', data.occupation, 'occupation')}
+                <div class="h-px bg-slate-50 w-full"></div>
+                ${renderDetailRow('briefcase', '現職機構與職稱', data.currentJob, 'currentJob')}
+                <div class="h-px bg-slate-50 w-full"></div>
+                <div class="flex gap-3 items-start">
+                    <div class="text-[#072e4d]/80 bg-[#072e4d]/10 p-2 rounded-lg mt-0.5"><i data-lucide="calendar" class="w-5 h-5"></i></div>
+                    <div class="flex-1">
+                        <p class="text-xs text-slate-400 font-medium mb-1">工作經歷</p>
+                        ${isEditing ? renderExperienceEdit(data.experience) : `<ul class="list-disc list-inside text-sm font-medium text-slate-800 bg-slate-50 p-3 rounded-xl border space-y-1">${data.experience.map(exp => `<li>${exp}</li>`).join('')}</ul>`}
+                    </div>
+                </div>
+            `;
 
-function DetailRow({ icon, label, value, isEditing, name, formData, onChange, type = "text" }) {
-  return (
-    <div className="flex items-start gap-3">
-      <div className="text-[#072e4d]/80 bg-[#072e4d]/10 p-2 rounded-lg mt-0.5">
-        {React.cloneElement(icon, { className: "w-5 h-5" })}
-      </div>
-      <div className="flex-1 overflow-hidden">
-        <label className="text-xs text-slate-400 font-medium">{label}</label>
-        {isEditing && name ? (
-          <input type={type} name={name} value={formData[name] || ''} onChange={onChange} className={inputClasses} />
-        ) : (
-          <p className="text-sm font-semibold text-slate-800 mt-1 truncate">{value}</p>
-        )}
-      </div>
-    </div>
-  );
-}
+            // 切換按鈕狀態
+            const actionContainer = document.getElementById('action-buttons');
+            if (isEditing) {
+                actionContainer.innerHTML = `
+                    <div class="flex gap-2">
+                        <button onclick="cancelEdit()" class="text-slate-400 p-2 bg-slate-100 rounded-full"><i data-lucide="x" class="w-4 h-4"></i></button>
+                        <button onclick="saveProfile()" class="text-white p-2 bg-[#072e4d] rounded-full shadow-sm"><i data-lucide="save" class="w-4 h-4"></i></button>
+                    </div>
+                `;
+            } else {
+                actionContainer.innerHTML = `
+                    <button onclick="enterEditMode()" class="text-[#072e4d] p-2 bg-[#072e4d]/10 rounded-full">
+                        <i data-lucide="edit-3" class="w-4 h-4"></i>
+                    </button>
+                `;
+            }
+
+            lucide.createIcons();
+        }
+
+        // 渲染單行資料
+        function renderDetailRow(icon, label, value, fieldName = null, type = "text") {
+            const content = (isEditing && fieldName) ? 
+                `<input type="${type}" value="${value}" oninput="updateEditField('${fieldName}', this.value)" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:border-[#072e4d] mt-1">` : 
+                `<p class="text-sm font-semibold text-slate-800 mt-1 truncate">${value}</p>`;
+            
+            return `
+                <div class="flex items-start gap-3">
+                    <div class="text-[#072e4d]/80 bg-[#072e4d]/10 p-2 rounded-lg mt-0.5"><i data-lucide="${icon}" class="w-5 h-5"></i></div>
+                    <div class="flex-1 overflow-hidden">
+                        <label class="text-xs text-slate-400 font-medium">${label}</label>
+                        ${content}
+                    </div>
+                </div>
+            `;
+        }
+
+        // 渲染工作經歷編輯
+        function renderExperienceEdit(exps) {
+            let html = `<div class="space-y-2">`;
+            exps.forEach((exp, idx) => {
+                html += `
+                    <div class="flex gap-2">
+                        <input value="${exp}" oninput="updateExpField(${idx}, this.value)" class="w-full px-3 py-2 bg-slate-50 border rounded-lg text-sm">
+                        <button onclick="removeExp(${idx})" class="p-2 text-red-500 bg-red-50 rounded-lg"><i data-lucide="x" class="w-4 h-4"></i></button>
+                    </div>
+                `;
+            });
+            html += `
+                <button onclick="addExp()" class="text-sm text-[#072e4d] flex items-center gap-1 mt-2 p-2 bg-[#072e4d]/5 rounded-lg w-full justify-center border border-[#072e4d]/20">
+                    <i data-lucide="plus" class="w-4 h-4"></i> 新增經歷
+                </button>
+            </div>`;
+            return html;
+        }
+
+        // --- 交互邏輯 ---
+
+        function enterEditMode() {
+            isEditing = true;
+            editForm = JSON.parse(JSON.stringify(profileData));
+            renderProfile();
+        }
+
+        function cancelEdit() {
+            isEditing = false;
+            renderProfile();
+        }
+
+        async function saveProfile() {
+            showScreen('loading-screen');
+            try {
+                // 這裡模擬 POST 到 GAS
+                /*
+                await fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'update', userId: userId, data: editForm })
+                });
+                */
+                profileData = JSON.parse(JSON.stringify(editForm));
+                isEditing = false;
+                renderProfile();
+                showScreen('main-screen');
+            } catch (err) {
+                alert("儲存失敗");
+                showScreen('main-screen');
+            }
+        }
+
+        function updateEditField(field, value) {
+            editForm[field] = value;
+            if(field === 'birthDate') renderProfile(); // 重新計算年齡顯示
+        }
+
+        function updateExpField(idx, value) {
+            editForm.experience[idx] = value;
+        }
+
+        function addExp() {
+            editForm.experience.push("");
+            renderProfile();
+        }
+
+        function removeExp(idx) {
+            editForm.experience.splice(idx, 1);
+            renderProfile();
+        }
+
+        // --- 工具函式 ---
+
+        function calculateAge(birthStr) {
+            if (!birthStr) return 0;
+            const today = new Date();
+            const birth = new Date(birthStr);
+            let age = today.getFullYear() - birth.getFullYear();
+            const m = today.getMonth() - birth.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+            return age;
+        }
+
+        function getStatusColor(status) {
+            const colors = {
+                '普通會員': 'bg-blue-100 text-blue-800 border-blue-200',
+                '學生會員': 'bg-green-100 text-green-800 border-green-200',
+                '終身會員': 'bg-yellow-100 text-yellow-800 border-yellow-300'
+            };
+            return colors[status] || 'bg-gray-100 text-gray-800 border-gray-200';
+        }
+
+        function redirectToRegistration() {
+            window.location.href = REGISTRATION_URL;
+        }
+    </script>
+</body>
+</html>
